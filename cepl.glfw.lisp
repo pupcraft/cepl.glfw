@@ -3,14 +3,20 @@
 (in-package #:cepl.glfw)
 
 (declaim (optimize (debug 3)))
+(defparameter *print-debug-statements* nil)
+(defmacro on-debug (&body body)
+  `(when *print-debug-statements*,@body))
 ;;======================================================================
 ;; api v1
 
+(defparameter *initialized-p* nil)
 (defun init ()
-  (print "initializing GLFW")
+  (on-debug
+   (print "initializing GLFW"))
   (let ((init-code (%glfw:init)))
-    (unless (= init-code %glfw:+true+)
-      (error "Failed to initialize GLFW"))))
+    (if (= init-code %glfw:+true+)
+	(setf *initialized-p* t)
+	(error "Failed to initialize GLFW"))))
 
 (defgeneric glfw-init (&rest init-flags)
   (:method (&rest init-flags)
@@ -24,12 +30,11 @@
 ;;----------------------------------------------------------------------
 
 (defun glfw-shutdown ()
-  (print "destroying GLFW 1")
-  (low-level-quit))
-
-(defun low-level-quit ()
-  (print "destroying GLFW 2")
-  (%glfw:terminate))
+  (on-debug
+    (print "destroying GLFW 1"))
+  (setf *initialized-p* nil)
+  (%glfw:terminate)
+  )
 
 ;;----------------------------------------------------------------------
 
@@ -58,10 +63,8 @@
   (declare (ignorable version double-buffer
 		      alpha-size depth-size stencil-size buffer-size
 		      red-size green-size blue-size))
-  (print "what")
-  (print (list version double-buffer
-	       alpha-size depth-size stencil-size buffer-size
-	       red-size green-size blue-size))
+  (on-debug
+   (print "making glfw context"))
   surface)
 
 (defvar *core-context* t)
@@ -82,7 +85,10 @@
                           red-size green-size blue-size buffer-size
                           double-buffer hidden resizable)
   (declare (ignore fullscreen buffer-size))
-  (print 2342342)
+  (unless *initialized-p*
+    (init))
+  (on-debug
+   (print "making glfw surface"))
   (labels
       ((create-window (;major minor
 		       )
@@ -91,16 +97,16 @@
 					      %glfw:+true+
 					      %glfw:+false+
 					      ))))
-	   ;;(hint %glfw:+doublebuffer+ double-buffer)
+	   (hint %glfw:+doublebuffer+ double-buffer)
 	   (hint %glfw:+resizable+ resizable)
-	   ;;(hint %glfw:+visible+ (not hidden))
-	   ;;(hint %glfw:+decorated+ (not no-frame))
-	   ;;(hint %glfw:+red-bits+ red-size)
-	   ;;(hint %glfw:+green-bits+ green-size)
-	   ;;(hint %glfw:+blue-bits+ blue-size)
-	   ;;(hint %glfw:+depth-bits+ depth-size)
-	   ;;(hint %glfw:+stencil-bits+ stencil-size)
-	   ;;(hint %glfw:+alpha-bits+ alpha-size)
+	   (hint %glfw:+visible+ (not hidden))
+	   (hint %glfw:+decorated+ (not no-frame))
+	   (hint %glfw:+red-bits+ red-size)
+	   (hint %glfw:+green-bits+ green-size)
+	   (hint %glfw:+blue-bits+ blue-size)
+	   (hint %glfw:+depth-bits+ depth-size)
+	   (hint %glfw:+stencil-bits+ stencil-size)
+	   (hint %glfw:+alpha-bits+ alpha-size)
 	   #+nil
 	   (hint %glfw:+opengl-profile+
 		 ;;%glfw:+opengl-any-profile+
