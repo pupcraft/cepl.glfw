@@ -6,24 +6,30 @@
 ;;======================================================================
 ;; api v1
 
+(defun init ()
+  (print "initializing GLFW")
+  (let ((init-code (%glfw:init)))
+    (unless (= init-code %glfw:+true+)
+      (error "Failed to initialize GLFW"))))
+
 (defgeneric glfw-init (&rest init-flags)
   (:method (&rest init-flags)
     (declare (ignore init-flags))
-
-    (glfw:initialize)))
+    (init)))
 
 (defun init-glfw-low-level (&rest glfw-init-flags)
   (declare (ignore glfw-init-flags))
-
-  (glfw:initialize))
+  (init))
 
 ;;----------------------------------------------------------------------
 
 (defun glfw-shutdown ()
+  (print "destroying GLFW 1")
   (low-level-quit))
 
 (defun low-level-quit ()
-  (glfw:terminate))
+  (print "destroying GLFW 2")
+  (%glfw:terminate))
 
 ;;----------------------------------------------------------------------
 
@@ -37,28 +43,37 @@
     (declare (ignore surface))
      (loop :for listener :in listeners :do
             (funcall listener nil))
-     (glfw:poll-events)))
+     (%glfw:poll-events)))
 
 ;;----------------------------------------------------------------------
 
 (defun glfw-swap (handle)
-  (glfw:swap-buffers handle))
+  (%glfw:swap-buffers handle))
 
 ;;----------------------------------------------------------------------
 
 (defun make-glfw-context (surface version double-buffer
                           alpha-size depth-size stencil-size buffer-size
                           red-size green-size blue-size)
-
-  (declare (ignore version double-buffer
-                   alpha-size depth-size stencil-size buffer-size
-                   red-size green-size blue-size))
+  (declare (ignorable version double-buffer
+		      alpha-size depth-size stencil-size buffer-size
+		      red-size green-size blue-size))
+  (print "what")
+  (print (list version double-buffer
+	       alpha-size depth-size stencil-size buffer-size
+	       red-size green-size blue-size))
   surface)
 
 (defvar *core-context* t)
 
 (defun glfw-make-current (context surface)
-  (glfw:make-context-current (or context surface)))
+  (let ((a
+	 (not (cffi:null-pointer-p (claw:ptr context))))
+	(b
+	 (not (cffi:null-pointer-p (claw:ptr surface)))))
+    (%glfw:make-context-current (cond (a context)
+				      (b surface)
+				      (t (error "both the context and suface are null pointers!"))))))
 
 ;;----------------------------------------------------------------------
 
@@ -67,56 +82,74 @@
                           red-size green-size blue-size buffer-size
                           double-buffer hidden resizable)
   (declare (ignore fullscreen buffer-size))
+  (print 2342342)
   (labels
-      ((create-window (major minor)
-         (%glfw:window-hint #X00021010 (if double-buffer 1 0))
+      ((create-window (;major minor
+		       )
+	 (flet ((hint (enum bool)		  
+		  (%glfw:window-hint enum (if bool
+					      %glfw:+true+
+					      %glfw:+false+
+					      ))))
+	   ;;(hint %glfw:+doublebuffer+ double-buffer)
+	   (hint %glfw:+resizable+ resizable)
+	   ;;(hint %glfw:+visible+ (not hidden))
+	   ;;(hint %glfw:+decorated+ (not no-frame))
+	   ;;(hint %glfw:+red-bits+ red-size)
+	   ;;(hint %glfw:+green-bits+ green-size)
+	   ;;(hint %glfw:+blue-bits+ blue-size)
+	   ;;(hint %glfw:+depth-bits+ depth-size)
+	   ;;(hint %glfw:+stencil-bits+ stencil-size)
+	   ;;(hint %glfw:+alpha-bits+ alpha-size)
+	   #+nil
+	   (hint %glfw:+opengl-profile+
+		 ;;%glfw:+opengl-any-profile+
 
-         (glfw:create-window :width width
-                             :height height
-                             :title title
-                             :resizable resizable
-                             :visible (not hidden)
-                             :decorated (not no-frame)
-
-                             :red-bits red-size
-                             :green-bits green-size
-                             :blue-bits blue-size
-                             :depth-bits depth-size
-                             :stencil-bits stencil-size
-                             :alpha-bits alpha-size
-
-                             :opengl-profile (if *core-context*
-                                                 :opengl-core-profile
-                                                 :opengl-compat-profile)
-                             :context-version-major major
-                             :context-version-minor minor)
-
-         (glfw:get-current-context))
+		 ;;#+nil
+		 (if *core-context*
+		     %glfw:+opengl-core-profile+
+		     %glfw:+opengl-compat-profile+))
+	   ;;(hint %glfw:+context-version-major+ major)
+	   ;;(hint %glfw:+context-version-minor+ minor)
+	   )
+	   
+	 (let ((window (%glfw:create-window width height title nil nil)))
+	   (if (not (cffi:null-pointer-p (claw:ptr window)))
+	       (progn
+		 (%glfw:make-context-current window)
+		 window)
+	       (error "why no glfw window?"))))
        ;; (create-context-by-version (version)
        ;;   (destructuring-bind (&optional major minor)
        ;;       (cepl.context:split-float-version version)
        ;;     (create-window major minor)))
 
+       #+nil
        (search-for-context ()
          (let ((context nil))
            (loop :for (major minor) :in `((4 5) (4 4) (4 3)
                                           (4 2) (4 1) (4 0)
-                                          (3 3))
+                                          (3 3) (3 1))
               :until context
               :do (setf context (create-window major minor)))
            (assert context)
            context)))
-
-    (search-for-context)))
+    (create-window)
+    ;(search-for-context)
+    ))
 
 (defun destroy-glfw-surface (surface)
-  (glfw:destroy-window surface))
+  (%glfw:destroy-window surface))
 
 (defun glfw-surface-size (win-handle)
-  (glfw:get-window-size win-handle))
+  (cffi:with-foreign-objects ((w :int)
+			      (h :int))
+    (%glfw:get-window-size win-handle w h)
+    (list (cffi:mem-ref w :int)
+	  (cffi:mem-ref h :int))))
 
 (defun glfw-set-surface-size (win-handle width height)
-  (glfw:set-window-size win-handle width height))
+  (%glfw:set-window-size win-handle width height))
 
 (defun glfw-surface-fullscreen-p (surface)
   (declare (ignore surface))
@@ -131,7 +164,7 @@
   nil)
 
 (defun glfw-set-surface-title (surface title)
-  (glfw:set-window-title surface title))
+  (%glfw:set-window-title surface title))
 
 ;;----------------------------------------------------------------------
 
@@ -176,5 +209,6 @@
 ;;----------------------------------------------------------------------
 
 (defun (setf vsync) (boolean)
-  (warn "Sorry setting vsync is not supported")
+  ;;(warn "Sorry setting vsync is not supported")
+  (%glfw:swap-interval (if boolean 1 0)) ;;1 is on
   boolean)
